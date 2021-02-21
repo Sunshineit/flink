@@ -220,6 +220,9 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
     private void runCluster(Configuration configuration, PluginManager pluginManager)
             throws Exception {
         synchronized (lock) {
+            /**
+             *
+             */
             initializeServices(configuration, pluginManager);
 
             // write host information into configuration
@@ -269,6 +272,7 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
         LOG.info("Initializing cluster services.");
 
         synchronized (lock) {
+            // 1.
             commonRpcService =
                     AkkaRpcServiceUtils.createRemoteRpcService(
                             configuration,
@@ -277,20 +281,26 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
                             configuration.getString(JobManagerOptions.BIND_HOST),
                             configuration.getOptional(JobManagerOptions.RPC_BIND_PORT));
 
+            // 2. （1.12 新增）
             JMXService.startInstance(configuration.getString(JMXServerOptions.JMX_SERVER_PORT));
 
             // update the configuration used to create the high availability services
             configuration.setString(JobManagerOptions.ADDRESS, commonRpcService.getAddress());
             configuration.setInteger(JobManagerOptions.PORT, commonRpcService.getPort());
 
+            // 3. io线程池
             ioExecutor =
                     Executors.newFixedThreadPool(
                             ClusterEntrypointUtils.getPoolSize(configuration),
                             new ExecutorThreadFactory("cluster-io"));
+            // 4.
             haServices = createHaServices(configuration, ioExecutor);
+            // 5.
             blobServer = new BlobServer(configuration, haServices.createBlobStore());
             blobServer.start();
+            // 6.
             heartbeatServices = createHeartbeatServices(configuration);
+            // 7.
             metricRegistry = createMetricRegistry(configuration, pluginManager);
 
             final RpcService metricQueryServiceRpcService =
@@ -307,6 +317,7 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
                             ConfigurationUtils.getSystemResourceMetricsProbingInterval(
                                     configuration));
 
+            // 8.
             archivedExecutionGraphStore =
                     createSerializableExecutionGraphStore(
                             configuration, commonRpcService.getScheduledExecutor());
